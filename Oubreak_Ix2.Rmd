@@ -1,0 +1,181 @@
+---
+title: "Outbreak Investigation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Objectives 
+
+
+# Prepare environment
+
+```{r}
+pacman::p_load(
+  rio,          # file import/export
+  here,         # relative filepaths 
+  lubridate,    # working with dates/epiweeks
+  aweek,        # alternative package for working with dates/epiweeks
+  incidence2,   # epicurves of linelist data
+  i2extras,     # supplement to incidence2
+  stringr,      # search and manipulate character strings
+  forcats,      # working with factors
+  RColorBrewer, # Color palettes from colorbrewer2.org
+  tidyverse,    # data management + ggplot2 graphics
+  DT            #create datatable
+) 
+```
+
+# Read data
+
+Import data 
+
+```{r}
+linelist <- import(here('data',
+                        'linelist_cleaned.xlsx'))
+```
+
+Check rows and columns
+
+```{r}
+glimpse(linelist)
+```
+
+
+# Explore data
+
+Basic descriptive
+
+```{r}
+
+```
+
+Transform data
+
+- create a group data
+
+```{r}
+count_data <- linelist %>% 
+  group_by(hospital, date_hospitalisation) %>% 
+  summarize(n_cases = dplyr::n()) %>% 
+  filter(date_hospitalisation > as.Date("2013-06-01")) %>% 
+  ungroup()
+```
+
+View the aggregated data
+
+```{r}
+count_data %>% 
+  datatable()
+```
+
+Set a reference date in case want to generate report
+
+```{r}
+data_date <- as.Date("2015-05-15")
+```
+
+
+```{r}
+linelist <- linelist %>% 
+  mutate(date_onset = as.Date(date_onset))
+```
+
+
+
+```{r}
+# check range of onset dates
+ggplot(data = linelist)+
+  geom_histogram(aes(x = date_onset))
+```
+
+# Epidemic Curve
+
+## using Epicurves from incidence2 package
+
+### All
+
+Steps:
+
+1. Create an incidence object
+2. Plot the incidence
+
+```{r}
+epi_day <- incidence(       # create incidence object
+  x = linelist,             # dataset
+  date_index = date_onset,  # date column
+  interval = "day"          # date grouping interval
+  )
+```
+
+
+```{r}
+epi_day
+```
+
+```{r}
+summary(epi_day)
+```
+
+```{r}
+plot(epi_day)
+```
+
+```{r}
+epi_wk <- incidence(linelist, date_onset, interval = "Monday week")
+```
+
+```{r}
+plot(epi_wk)
+```
+
+### By groups
+
+```{r}
+# Create incidence object, with data grouped by age category
+age_outbreak <- incidence(
+  linelist,                # dataset
+  date_index = date_onset, # date column
+  interval = "week",       # Monday weekly aggregation of cases
+  groups = age_cat,        # age_cat is set as a group
+  na_as_group = TRUE)      # missing values assigned their own group
+
+# plot the grouped incidence object
+plot(
+  age_outbreak,             # incidence object with age_cat as group
+  fill = age_cat)+          # age_cat is used for bar fill color (must have been set as a groups column above)
+labs(fill = "Age Category") # change legend title from default "age_cat" (this is a ggplot2 modification)
+```
+
+
+### Filtered data
+
+```{r}
+# filter the linelist
+central_data <- linelist %>% 
+  filter(hospital == "Central Hospital")
+
+# create incidence object using filtered data
+central_outbreak <- incidence(central_data, date_index = date_onset, interval = "week")
+
+# plot the incidence object
+plot(central_outbreak, title = "Weekly case incidence at Central Hospital")
+```
+
+### Rolling average
+
+```{r}
+rolling_avg <- incidence(                    # make incidence object
+  linelist,
+  date_index = date_onset,
+  interval = "week",
+  groups = gender) %>% 
+  
+  i2extras::add_rolling_average(before = 6)  # add rolling averages (in this case, by gender)
+
+# plot
+plot(rolling_avg) # faceted automatically because rolling average on groups
+```
+
