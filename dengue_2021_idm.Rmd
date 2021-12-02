@@ -1,0 +1,401 @@
+---
+title: "Practical: Introduction to Spatial Data"
+author: "Kamarul Imran Musa"
+date: "8/6/2019" 
+output: 
+  rmdformats::readthedown
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workflow
+
+- Prepare environment : 
+  - directory
+  - load packages
+  - spatial data (Malaysia and Dengue)
+- Read data 
+  - polygons
+  - points
+- Analyze 
+
+# Preparing environment for analysis
+
+The packages for 
+
+- running spatial analysis
+- data wrangling
+- import data
+- deals with regular expressions
+
+```{r}
+library(sf)
+library(tidyverse)
+library(here)
+library(janitor)
+library(DT)
+library(stringr)
+library(readxl)
+library(broom)
+library(tmap)
+library(mapview)
+library(lubridate)
+```
+
+
+# Read polygons data
+
+```{r}
+kel <- st_read(here("data", 
+                    "Map_Kelantan",
+                    "kelantan.shp")) 
+kel %>% datatable()
+```
+
+The geometry is *Projected CRS: Kertau (RSO) / RSO Malaya (m)*
+
+```{r}
+st_geometry(kel)
+```
+Make plot
+
+```{r}
+plot(kel[,2]) #daerah
+plot(kel[,3]) #mukim
+plot(kel[,6]) #population
+```
+
+Or using geom_sf from **ggplot** package
+
+
+```{r}
+kel %>% 
+  ggplot() +
+  geom_sf(aes(fill = JUM_JANTIN)) +
+  ggtitle('Population by subdistrict') +
+  theme_bw()
+```
+
+Another way of plotting (by changing the color palette)
+
+```{r}
+ggplot() + 
+  geom_sf(data = kel, aes(fill = JUM_JANTIN)) +
+  scale_fill_gradientn(colors = sf.colors(20)) +
+  ggtitle('Population by subdistrict') +
+  theme_bw()
+```
+
+or using the **tmap** package
+
+In a non-interactive mode
+
+```{r}
+tm_shape(kel) +
+  tm_polygons("JUM_JANTIN")
+```
+
+Adding facets (by splitting the map based on gender)
+
+```{r}
+tm_shape(kel) +
+  tm_polygons(c("LELAKI", "PEREMPUAN")) +
+  tm_facets(ncol = 2)
+```
+
+Adding a variable for are using `sr_area()`
+
+```{r}
+kel <- kel %>% mutate(area_muk = st_area(kel),
+                      area_muk_km2 = st_area(kel)/1000000)
+kel %>% datatable()
+```
+
+
+# Dengue data
+
+- This is vector data in points format.
+- The dengue file comes in `xlsx` format. 
+- So we will read using **read_xl** package 
+
+```{r}
+den <- read_xlsx(here('data',
+                      'dengue_2019.xlsx')) %>%
+  clean_names()
+glimpse(den)
+```
+
+# Data cleaning
+
+- select the first 8 letters of variable name
+
+```{r}
+den2 <- den %>% select_all(~str_sub(., end = 8L))
+glimpse(den2)
+```
+
+Need to remove missing data (NA) in coordinate columns 
+
+```{r}
+den2 <- den2 %>% 
+  filter(!is.na(latitud_),
+         !is.na(lngitud_))
+```
+
+# Convert the dengue data to spatial data
+
+- The excel is in WGS84 format so `CRS = 4326`. 
+- Then let's describe `den` (now is spatial format)
+
+
+```{r}
+loc_den <- st_as_sf(den2, 
+                    coords = c("lngitud_", "latitud_"), 
+                    crs = 4326)
+loc_den %>% datatable()
+```
+
+Let's confirm the `CRS` in WGS84 (EPSG:4326)
+
+```{r}
+st_crs(loc_den)
+```
+
+Make plots to see if map is alright (no outliers)
+
+```{r}
+ggplot() +
+  geom_sf(data = loc_den) +
+  ggtitle("Map of Dengue 2019") +
+  theme_bw()
+```
+
+
+# Convert shapefile to RSO (https://epsg.io/3168)
+
+Reasons
+
+- the kel polygons is in RSO
+- so the dengue points should also be in RSO
+
+```{r}
+loc_den2 <- st_transform(loc_den, 3168)
+loc_den2 %>% datatable()
+```
+
+Now select points that fall only in Kelantan. Experince tells us there are always points outside the required boundary
+
+```{r}
+den_kel <- loc_den2 %>% 
+  mutate(within_kel = lengths(st_within(loc_den2, kel)))
+den_kel %>% datatable()
+```
+
+```{r}
+den_kel <- den_kel %>% 
+  filter(within_kel == 1)
+```
+
+
+# Dealing with dates
+
+- variable `tarikh_o` and `tkh_noti` are in `chr` format
+- need to change chr to the correct `dates` format
+- https://lubridate.tidyverse.org/
+- http://daniellequinn.github.io/RLessons/FormattingDates/FormattingDates.html 
+
+```{r}
+den_kel <- den_kel %>% 
+  mutate_at(vars(tarikh_o, tkh_noti), ~dmy(.))
+```
+
+We can split dates into
+
+- month
+- day
+- year
+
+
+```{r}
+den_kel <- den_kel %>% 
+  mutate(year_on =  year(tarikh_o),
+         month_on = month(tarikh_o),
+         day_on = day(tarikh_o))
+den_kel %>% datatable()
+```
+
+
+Generate epiweek
+
+```{r}
+den_kel <- den_kel %>% 
+  mutate(epiweek_on = epiweek(tarikh_o))
+```
+
+Now we have
+
+- polygon data
+- point data
+
+```{r}
+glimpse(den_kel)
+glimpse(loc_den2)
+```
+
+
+# Spatial plots
+
+The overall plot for the year 2019
+
+```{r}
+den_kel <- den_kel %>% 
+  filter(year_on == 2019) 
+```
+
+The plots
+
+```{r}
+den_plot <- ggplot() +
+  geom_sf(data = kel) +
+  geom_sf(data = den_kel) +
+  ggtitle("Map of Dengue Cases for 2019") +
+  theme_bw()
+den_plot
+```
+
+Now let's make plots based on 
+
+- jantina
+- year of onset
+- month of onset
+
+```{r }
+den_plot + 
+  facet_wrap(~jantina)
+```
+
+```{r fig.width=6, fig.height=12}
+den_plot + 
+  facet_wrap(~ year_on + month_on, ncol = 3)
+```
+
+```{r fig.width=6, fig.height=12}
+den_plot + 
+  facet_wrap(~ DAERAH, ncol = 3)
+```
+
+Further analysis for year 2019
+
+- number of dengue cases (column n) based on year, month and epid week
+- bar chart for the total number per epi week
+- line chart for the trend of dengue for each epid week
+
+
+```{r}
+# count den per epiweek
+den_kel %>% 
+  filter(year_on == 2019) %>% 
+  group_by(year_on, month_on, epiweek_on) %>% 
+  count() %>% 
+  print(n = 52) %>%
+  ggplot(aes(x = epiweek_on, y = n)) + 
+  geom_bar(stat = 'identity', fill = 'white') +
+  geom_line(colour = "red") +
+  ggtitle('Number of dengue cases based on epid week') +
+  ylab('Number') +
+  xlab('Epid week based on date of onset') +
+  theme_bw()
+```
+
+Using the **tmaps** package
+
+All data for all years
+
+```{r}
+tm_shape(kel) +
+  tm_polygons("DAERAH") + 
+  tm_shape(den_kel) +
+  tm_dots()
+```
+
+Split plots
+
+```{r}
+tm_shape(kel) +
+  tm_polygons("NEGERI") +
+  tm_facets('DAERAH') + 
+  tm_shape(den_kel) +
+  tm_dots(shape = 'jantina', size = 0.1) 
+```
+
+
+# Density of dengue cases
+
+Aim : to calculate dengue cases per area
+
+Steps:
+
+- Join points `den_kel` to polygons `kel` shapefiles
+- Calculate dengue points in each mukim (polygons)
+
+
+```{r}
+den_in_muk <- st_join(den_kel, kel, 
+                      join = st_within)
+glimpse(den_in_muk)
+```
+
+```{r}
+count_den_mukim_mth_yr <- den_in_muk %>% 
+  count(DAERAH, MUKIM, year_on, 
+        month_on, JUM_JANTIN) %>% 
+  ungroup()
+count_den_mukim_mth_yr %>% datatable()
+```
+
+
+Calculate incidence of dengue per 1000 population for 
+
+- each mukim
+- year
+- month
+
+```{r}
+count_den_muk_m_y_1000 <- count_den_mukim_mth_yr %>% 
+  mutate(incidence_den = (n/JUM_JANTIN)*1000)
+count_den_muk_m_y_1000 %>% datatable()
+```
+
+# Plot incidence of dengue for mukim
+
+join polygon to point to enable plot polygon of Kelantan
+
+```{r}
+count_den_mukim <- den_in_muk %>% 
+  count(DAERAH, MUKIM, JUM_JANTIN) %>% 
+  ungroup()
+count_den_mukim_1000 <- count_den_mukim %>% 
+  mutate(inc_1000 = (n/JUM_JANTIN)*1000)
+```
+
+
+```{r}
+kel_with_den <- st_join(kel, count_den_mukim_1000)
+glimpse(kel_with_den)
+```
+
+Plot
+
+```{r}
+ggplot() + 
+  geom_sf(data = kel_with_den, aes(fill = inc_1000)) +
+  scale_fill_gradientn(colors = sf.colors(20)) +
+  ggtitle('Dengue Incidence per 1000 population') +
+  theme_bw()
+```
+
+
+
+

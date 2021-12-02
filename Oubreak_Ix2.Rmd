@@ -1,6 +1,9 @@
 ---
-title: "Outbreak Investigation"
-output: html_document
+title: "Practical: Outbreak Investigation"
+author: "Kamarul Imran Musa"
+date: "8/6/2019" 
+output: 
+  rmdformats::readthedown
 ---
 
 ```{r setup, include=FALSE}
@@ -8,6 +11,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Objectives 
+
+- to load packages 
+- to read the excel data
+- to perform basic statistics
+- to plot epidemic curve
+- to plot rolling average
 
 
 # Prepare environment
@@ -23,8 +32,11 @@ pacman::p_load(
   stringr,      # search and manipulate character strings
   forcats,      # working with factors
   RColorBrewer, # Color palettes from colorbrewer2.org
-  tidyverse,    # data management + ggplot2 graphics
-  DT            #create datatable
+  tidyverse,
+  # data management + ggplot2 graphics
+  gtsummary,
+  DT, #create datatable
+  slider #rollingaverage
 ) 
 ```
 
@@ -46,13 +58,16 @@ glimpse(linelist)
 
 # Explore data
 
-Basic descriptive
+## Basic descriptive
 
 ```{r}
-
+linelist %>% 
+  select(gender, age, wt_kg, ht_cm, cough, outcome) %>%    # keep variables of interest
+  tbl_summary(by = outcome) %>%  # produce summary table and specify grouping variable
+  add_p()                        
 ```
 
-Transform data
+## Transform data
 
 - create a group data
 
@@ -64,12 +79,14 @@ count_data <- linelist %>%
   ungroup()
 ```
 
-View the aggregated data
+## View aggregated data
 
 ```{r}
 count_data %>% 
   datatable()
 ```
+
+## Formatting date 
 
 Set a reference date in case want to generate report
 
@@ -83,7 +100,7 @@ linelist <- linelist %>%
   mutate(date_onset = as.Date(date_onset))
 ```
 
-
+# Plot epidemic curve I
 
 ```{r}
 # check range of onset dates
@@ -91,9 +108,9 @@ ggplot(data = linelist)+
   geom_histogram(aes(x = date_onset))
 ```
 
-# Epidemic Curve
+# Plot epidemic curve II
 
-## using Epicurves from incidence2 package
+## Using Epicurves from incidence2 package
 
 ### All
 
@@ -124,7 +141,8 @@ plot(epi_day)
 ```
 
 ```{r}
-epi_wk <- incidence(linelist, date_onset, interval = "Monday week")
+epi_wk <- incidence(linelist, date_onset, 
+                    interval = "Monday week")
 ```
 
 ```{r}
@@ -150,21 +168,34 @@ labs(fill = "Age Category") # change legend title from default "age_cat" (this i
 ```
 
 
-### Filtered data
+### Epidemic curve for specific group
+
+- Choose the group
 
 ```{r}
 # filter the linelist
 central_data <- linelist %>% 
   filter(hospital == "Central Hospital")
+```
 
+- Create incidence object 
+
+```{r}
 # create incidence object using filtered data
 central_outbreak <- incidence(central_data, date_index = date_onset, interval = "week")
+```
 
+- Plot epidemic curve
+
+```{r}
 # plot the incidence object
 plot(central_outbreak, title = "Weekly case incidence at Central Hospital")
 ```
 
 ### Rolling average
+
+- using `incidence()` 
+- specify a 7-day rolling average
 
 ```{r}
 rolling_avg <- incidence(                    # make incidence object
@@ -174,8 +205,51 @@ rolling_avg <- incidence(                    # make incidence object
   groups = gender) %>% 
   
   i2extras::add_rolling_average(before = 6)  # add rolling averages (in this case, by gender)
+```
 
+- plot rolling average
+
+```{r}
 # plot
 plot(rolling_avg) # faceted automatically because rolling average on groups
 ```
+- if you are NOT using incidence function and calculating the rolling average directly from your data (and when there are missing dates for days with no case), for example
 
+
+```{r}
+daily_counts <- linelist %>% 
+  count(date_hospitalisation, name = "new_cases") %>%
+  ungroup()
+daily_counts %>%
+  datatable()
+```
+
+- then use `slide_index_dbl()` to get accurate cumulative number of cases
+
+```{r}
+rolling <- daily_counts %>% 
+  mutate( #Using slide_index_dbl()
+    #########################
+    indexed_7day = slide_index_dbl(
+        new_cases,                       # calculate on new_cases
+        .i = date_hospitalisation,       # indexed with date_onset 
+        .f = ~sum(.x, na.rm = TRUE),     # function is sum() with missing values removed
+        .before = days(6))               # window is the DAY and 6 prior DAYS
+    )
+rolling %>%
+  datatable()
+```
+
+- this is the plot
+
+```{r}
+ggplot(data = rolling)+
+  geom_line(mapping = aes(x = date_hospitalisation, 
+                          y = indexed_7day), 
+            size = 1) 
+```
+
+
+# References
+
+- The Epidemiologist R Handbook : https://epirhandbook.com/en/index.html 

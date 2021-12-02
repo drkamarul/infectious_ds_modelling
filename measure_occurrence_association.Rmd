@@ -2,7 +2,8 @@
 title: "Measure of Disease Occurrence and Association"
 author: "Kamarul Imran Musa"
 date: "11/22/2021"
-output: html_document
+output: 
+  rmdformats::readthedown
 ---
 
 ```{r setup, include=FALSE}
@@ -21,7 +22,7 @@ library(pacman)
 pacman::p_load(pubh, tidyverse, epiR)
 ```
 
-# pubh package
+# **pubh** package
 
 ## Data
 
@@ -50,11 +51,37 @@ Bernard %>%
 
 ## Cross tabulation
 
+Let's plot a barchart
+
+```{r}
+Bernard %>%
+  ggplot(aes(y = treat)) +
+  geom_bar(aes(fill = fate), 
+           position = position_stack(reverse = TRUE)) +
+  ylab('Treatment Group') +
+  xlab('Frequency') +
+  theme_bw()
+```
+
+
 
 ```{r}
 Bernard %>%
   contingency(fate ~ treat)
 ```
+
+## Manual calculation
+
+- Incidence in exposed = 84/(84 + 140) = 0.375
+- Incidence in non- exposed = 92 / (92 + 139) = 92/231 = 0.3982684
+- Incidence = (84 + 92)/(84 + 92 + 140 + 139) = 0.3868132
+- Incidence risk ratio = 0.375 / 0.3982684 = 0.9415761
+- Odds ratio = (84 * 139)/(92 * 140) = 0.907
+- Attrib risk in the exposed = 0.375 - 0.3982684 = -0.0232684
+- Attrib fraction in the exposed (%) = (0.375 - 0.3982684)/ 0.375 = -0.06204907
+- Attrib risk in the population * = 0.375 - 0.3868132 = -0.0118132
+- Attrib fraction in the population (%) = (0.375 - 0.3868132)/0.375 = -0.03150187
+
 
 # epiR package
 
@@ -81,8 +108,8 @@ epi.2by2(dat = dat.v01, method = "cross.sectional",
 - Prevalence ratio = 0.00597/0.00149
 
 
-- OE+ = 13/2163 = 0.00601
-- OE- = 5/3349 = 0.00149
+- Odds of E+ in outcome = 13/2163 = 0.00601
+- Odds of E- in outcome = 5/3349 = 0.00149
 - OT = 18/5512 = 0.00327
 
 - Odds Ratio = 0.00601/0.00149
