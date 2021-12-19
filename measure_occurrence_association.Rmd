@@ -12,7 +12,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Objectives
 
-- measure of diseases occurence 
+Basic skills to perform 
+
+- measure of diseases occurrence 
 - mesure of disease association
 
 # Prepare environment
@@ -51,6 +53,8 @@ Bernard %>%
 
 ## Cross tabulation
 
+### Cohort
+
 Let's plot a barchart
 
 ```{r}
@@ -70,7 +74,7 @@ Bernard %>%
   contingency(fate ~ treat)
 ```
 
-## Manual calculation
+### Manual calculation
 
 - Incidence in exposed = 84/(84 + 140) = 0.375
 - Incidence in non- exposed = 92 / (92 + 139) = 92/231 = 0.3982684
@@ -81,6 +85,29 @@ Bernard %>%
 - Attrib fraction in the exposed (%) = (0.375 - 0.3982684)/ 0.375 = -0.06204907
 - Attrib risk in the population * = 0.375 - 0.3868132 = -0.0118132
 - Attrib fraction in the population (%) = (0.375 - 0.3868132)/0.375 = -0.03150187
+
+### Case-control
+
+```{r}
+Bernard %>%
+  ggplot(aes(x = treat)) +
+  geom_bar(aes(fill = fate), 
+           position = position_stack(reverse = TRUE)) +
+  xlab('Treatment Group') +
+  ylab('Frequency') +
+  theme_bw()
+```
+
+
+```{r}
+Bernard %>%
+  contingency(fate ~ treat, method = 'case.control')
+```
+### Manual calculation
+
+- odds of exposed in outcome+ = 84/92
+- odds of exposed in outcome- = 140/139
+- Odds ratio = (84 * 139)/(92 * 140) = 0.907
 
 
 # epiR package

@@ -44,6 +44,20 @@ library(mapview)
 library(lubridate)
 ```
 
+# Download data
+
+1. Create a folder in `My Documents`
+2. Name folder is `gis`
+3. Download data (folder `data`)
+4. Paste folder `data` inside folder `gis`  
+
+# Create new RStudio project
+
+1. File
+2. New Project
+3. Existing Directory
+4. Browse for folder `gis`
+ 
 
 # Read polygons data
 
