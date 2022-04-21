@@ -1,2 +1,3 @@
-# infectious_ds_modelling
+# Module for Infectious Disease Modelling 
+
 Infectious Disease Modelling Training
